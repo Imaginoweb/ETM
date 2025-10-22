@@ -29,7 +29,7 @@
     .subtitle{font-size:14px;color:var(--muted)}
     .section-title{font-size:18px;font-weight:600;margin:0 0 4px}
     .grid{display:grid;gap:12px}
-    .grid.kpi{grid-template-columns:repeat(4,minmax(0,1fr))}
+    .grid.kpi{grid-template-columns:repeat(3,minmax(0,1fr))} /* 3 KPIs (canal préféré retiré) */
     @media (max-width: 900px){.grid.kpi{grid-template-columns:repeat(2,minmax(0,1fr))}}
     .kpi{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px}
     .kpi .label{font-size:12px;color:var(--muted)}
@@ -54,9 +54,6 @@
     .muted{color:var(--muted)}
     .error{background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:12px}
     .hint{color:var(--muted);text-align:center;padding:32px 12px}
-    .tabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--border);border-radius:12px;overflow:hidden}
-    .tabs button{border:0;border-right:1px solid var(--border);background:#fff;padding:10px 8px}
-    .tabs button.active{background:var(--accent);font-weight:700}
     .mr{margin-right:8px}
   </style>
 </head>
@@ -76,15 +73,13 @@
   <div class="container">
     <div class="card">
       <div class="content">
-        <div class="section-title">Recherche profil</div>
-        <div class="subtitle">ucdId → API directe. Email / Téléphone → filtrage client-side sur un lot (limite 1000).</div>
+        <div class="section-title">Recherche client</div>
         <div class="controls" style="margin-top:12px">
           <div style="display:flex;gap:8px">
-            <button class="tabbtn" data-mode="ucdId">ucdId</button>
             <button class="tabbtn" data-mode="email">Email</button>
             <button class="tabbtn" data-mode="phone">Téléphone</button>
           </div>
-          <input id="query" placeholder="ex: 3f4d... ou lucie@exemple.com ou +336..." />
+          <input id="query" placeholder="ex: lucie@exemple.com ou +336..." />
           <button id="searchBtn">Chercher</button>
         </div>
       </div>
@@ -92,7 +87,7 @@
 
     <div id="error" style="margin-top:12px;display:none" class="error"></div>
 
-    <div id="empty" class="hint">Aucun profil chargé. Recherchez par ucdId pour une réponse immédiate.</div>
+    <div id="empty" class="hint">Aucun profil chargé. Recherchez par email ou téléphone.</div>
 
     <div id="content" style="display:none">
       <div class="row">
@@ -128,10 +123,6 @@
                   <div class="label">CA M-6</div>
                   <div class="value" id="kpiCA6">—</div>
                 </div>
-                <div class="kpi">
-                  <div class="label">Canal préféré</div>
-                  <div class="value" id="kpiCanal">—</div>
-                </div>
               </div>
 
               <div style="margin-top:18px">
@@ -160,31 +151,7 @@
               </div>
             </div>
           </div>
-
-          <div class="card">
-            <div class="content">
-              <div class="section-title">Actions</div>
-              <div class="tabs" style="margin-top:10px">
-                <button class="active" id="tabQuick">Créer Lucie</button>
-                <button id="tabImport">Import JSON</button>
-                <button id="tabExport">Exporter JSON</button>
-              </div>
-              <div id="panelQuick" style="padding-top:12px">
-                <button id="upsertLucie">Créer / Upsert Lucie Vannier</button>
-              </div>
-              <div id="panelImport" style="display:none;padding-top:12px">
-                <textarea id="jsonText" rows="8">{ 
-  "firstName": "Lucie",
-  "lastName": "Vannier",
-  "email": "lucie.vannier@example.com"
-}</textarea>
-                <div style="margin-top:8px"><button id="sendJson">Envoyer</button></div>
-              </div>
-              <div id="panelExport" style="display:none;padding-top:12px">
-                <pre id="exportBox" style="white-space:pre-wrap;background:var(--accent);padding:12px;border-radius:12px;border:1px solid var(--border)">—</pre>
-              </div>
-            </div>
-          </div>
+          <!-- Bloc Actions supprimé conformément à la demande -->
         </div>
       </div>
     </div>
@@ -194,8 +161,13 @@
   <script>
     const API_BASE = "https://francois-sandbox.saas.imagino.com/ucdapi/API_MuleSoft/2";
     const API_KEY = "0cfe1225-a2f7-43b9-9645-caebdaf5a971";
+    const FORCED_IMAGES = [
+      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
+      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
+      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwc48f4d3b/655576101_x.jpg?sw=600&sh=906"
+    ];
 
-    let MODE = "ucdId"; // ucdId | email | phone
+    let MODE = "email"; // email | phone
     const $ = (sel)=>document.querySelector(sel);
 
     function fmtDate(d){ if(!d) return "—"; return new Date(d).toLocaleDateString(); }
@@ -204,15 +176,6 @@
 
     async function apiGet(path){
       const r = await fetch(API_BASE + path, { headers: { "X-API-KEY": API_KEY }, cache: "no-store" });
-      if(!r.ok) throw new Error(r.status + " " + r.statusText);
-      return r.json();
-    }
-    async function apiPost(path, body){
-      const r = await fetch(API_BASE + path, {
-        method: "POST",
-        headers: { "X-API-KEY": API_KEY, "Content-Type": "application/json" },
-        body: JSON.stringify(body)
-      });
       if(!r.ok) throw new Error(r.status + " " + r.statusText);
       return r.json();
     }
@@ -232,7 +195,6 @@
       $("#empty").style.display = "block";
       $("#content").style.display = "none";
       setError(null);
-      $("#exportBox").textContent = "—";
     }
 
     function initials(p){
@@ -263,7 +225,6 @@
       $("#kpiCA").textContent = fmtEUR(p.Profils_RCU_Commandes_agg);
       $("#kpiLast").textContent = fmtDate(p.Profils_RCU_Commandes_agg2);
       $("#kpiCA6").textContent = fmtEUR(p.Profils_RCU_Commandes_agg3);
-      $("#kpiCanal").textContent = p.Canal_prefere || "—";
 
       $("#optEmail").textContent = p.optInEmail ? "Oui" : "Non";
       $("#optSMS").textContent   = p.optInSMS ? "Oui" : "Non";
@@ -280,10 +241,11 @@
       } else {
         $("#productsEmpty").style.display = "none";
         list.forEach((pr,i)=>{
+          const forcedImg = FORCED_IMAGES[i % FORCED_IMAGES.length];
           const el = document.createElement("div");
           el.className = "product";
           el.innerHTML = `
-            <div class="imgwrap">${pr.Image_Produit ? `<img src="${pr.Image_Produit}" alt="${pr.Nom_Produit||"Produit"}">` : ""}</div>
+            <div class="imgwrap"><img src="${forcedImg}" alt="${(pr.Nom_Produit||"Produit").replace(/"/g,"&quot;")}"></div>
             <div style="padding:10px">
               <div class="title" title="${(pr.Nom_Produit||"").replace(/"/g,"&quot;")}">${pr.Nom_Produit||"Produit"}</div>
               <div class="muted" style="font-size:12px">SKU ${pr.SKU_Produit||"—"}</div>
@@ -293,9 +255,6 @@
           grid.appendChild(el);
         });
       }
-
-      // Export JSON tab content
-      $("#exportBox").textContent = JSON.stringify(p, null, 2);
     }
 
     async function findProfile(){
@@ -303,53 +262,21 @@
         setError(null);
         const q = $("#query").value.trim();
         if(!q) return;
-        let p = null;
 
-        if(MODE==="ucdId"){
-          const data = await apiGet("/Vue_unifie_ETAM/" + encodeURIComponent(q));
-          p = data?.data || data || null;
-        } else {
-          const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
-          const list = data?.data || [];
-          const cleaned = (s)=> (s||"").toString().replace(/\\s+/g,"").toLowerCase();
-          p = list.find(x=>{
-            if(MODE==="email") return (x.email||"").toLowerCase()===q.toLowerCase();
-            if(MODE==="phone") return cleaned(x.telephone)===cleaned(q);
-            return false;
-          }) || null;
-          if(!p) setError("Aucun profil trouvé dans la première page (limite 1000).");
-        }
-
-        if(p) renderProfile(p); else resetUI();
+        // Pull first page and filter client-side
+        const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
+        const list = data?.data || [];
+        const cleaned = (s)=> (s||"").toString().replace(/\\s+/g,"").toLowerCase();
+        const p = list.find(x=>{
+          if(MODE==="email") return (x.email||"").toLowerCase()===q.toLowerCase();
+          if(MODE==="phone") return cleaned(x.telephone)===cleaned(q);
+          return false;
+        }) || null;
+        if(!p){ setError("Aucun profil trouvé dans la première page (limite 1000)."); resetUI(); return; }
+        renderProfile(p);
       }catch(e){
         setError(String(e.message||e));
         resetUI();
-      }
-    }
-
-    async function upsertLucie(){
-      try{
-        setError(null);
-        const now = new Date().toISOString();
-        const payload = {
-          firstName:"Lucie", lastName:"Vannier", email:"lucie.vannier@example.com",
-          telephone:"+33 6 12 34 56 78", gender:"F", city:"Paris", countryCodeISO2:"FR",
-          Canal_prefere:"Email", optInEmail:true, lastModifiedDate: now, origin:"clienteling-demo"
-        };
-        const res = await apiPost("/Vue_unifie_ETAM", payload);
-        const u = res?.ucdId ? res : (res?.data || null);
-        if(u?.ucdId){
-          MODE = "ucdId"; setTabs();
-          $("#query").value = u.ucdId;
-          await findProfile();
-        } else {
-          // fallback: try to search by email right away
-          MODE = "email"; setTabs();
-          $("#query").value = payload.email;
-          await findProfile();
-        }
-      }catch(e){
-        setError(String(e.message||e));
       }
     }
 
@@ -360,32 +287,6 @@
     setTabs();
     $("#searchBtn").addEventListener("click", findProfile);
     $("#resetBtn").addEventListener("click", ()=>{ $("#query").value=""; resetUI(); });
-    $("#upsertLucie").addEventListener("click", upsertLucie);
-
-    // Tabs inside Actions card
-    const tabQuick = $("#tabQuick"), tabImport=$("#tabImport"), tabExport=$("#tabExport");
-    const panelQuick=$("#panelQuick"), panelImport=$("#panelImport"), panelExport=$("#panelExport");
-    function activate(t){
-      [tabQuick,tabImport,tabExport].forEach(x=>x.classList.remove("active"));
-      [panelQuick,panelImport,panelExport].forEach(x=>x.style.display="none");
-      t.classList.add("active");
-      if(t===tabQuick) panelQuick.style.display="block";
-      if(t===tabImport) panelImport.style.display="block";
-      if(t===tabExport) panelExport.style.display="block";
-    }
-    tabQuick.addEventListener("click", ()=>activate(tabQuick));
-    tabImport.addEventListener("click", ()=>activate(tabImport));
-    tabExport.addEventListener("click", ()=>activate(tabExport));
-    activate(tabQuick);
-
-    $("#sendJson").addEventListener("click", async ()=>{
-      try{
-        setError(null);
-        const payload = JSON.parse($("#jsonText").value);
-        await apiPost("/Vue_unifie_ETAM", payload);
-        alert("Import envoyé. Faites une recherche pour recharger le profil.");
-      }catch(e){ setError(String(e.message||e)); }
-    });
   </script>
 </body>
 </html>
