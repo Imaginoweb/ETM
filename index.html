@@ -1,5 +1,4 @@
-# Create v4 with live name search suggestions and corrected 2nd product image
-html4 = r"""<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
@@ -59,7 +58,6 @@ html4 = r"""<!DOCTYPE html>
     .store{display:grid;grid-template-columns: 1fr;gap:8px}
     .store img{width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
     .tabbtn{min-width:110px}
-    /* Suggestions dropdown */
     .suggestions{position:absolute;left:272px;right:116px;top:100%;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;max-height:260px;overflow:auto;display:none;z-index:5}
     @media (max-width:700px){.suggestions{left:0;right:0}}
     .suggestion{padding:10px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;cursor:pointer}
@@ -186,19 +184,17 @@ html4 = r"""<!DOCTYPE html>
   <script>
     const API_BASE = "https://francois-sandbox.saas.imagino.com/ucdapi/API_MuleSoft/2";
     const API_KEY = "0cfe1225-a2f7-43b9-9645-caebdaf5a971";
-    // Distinct images for product cards (2nd image fixed to ETAM URL provided)
     const PRODUCT_IMAGES = [
       "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
       "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwfb1021ff/655583324_x.jpg?sw=600&sh=906",
       "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwc48f4d3b/655576101_x.jpg?sw=600&sh=906"
     ];
-    // Portrait for Lucie Vannier
     const LUCIE_AVATAR_URL = "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cG9ydHJhaXQlMjBmZW1tZXxlbnwwfHwwfHx8MA%3D%3D&fm=jpg&q=60&w=3000";
 
     let MODE = "name"; // name | email | phone
     const $ = (sel)=>document.querySelector(sel);
 
-    let cachedProfiles = null; // will store first page for client-side filtering + suggestions
+    let cachedProfiles = null;
     async function ensureCache(){
       if(cachedProfiles) return cachedProfiles;
       const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
@@ -291,6 +287,7 @@ html4 = r"""<!DOCTYPE html>
         $("#productsEmpty").style.display = "none";
         list.forEach((pr,i)=>{
           const forcedImg = PRODUCT_IMAGES[i % PRODUCT_IMAGES.length];
+          const colorText = (i===0) ? "Gris" : (i===1) ? "Bleu foncé" : (pr.Couleur_Produit||pr.COULEUR||"—");
           const el = document.createElement("div");
           el.className = "product";
           el.innerHTML = `
@@ -298,7 +295,7 @@ html4 = r"""<!DOCTYPE html>
             <div style="padding:10px">
               <div class="title" title="${(pr.Nom_Produit||"").replace(/"/g,"&quot;")}">${pr.Nom_Produit||"Produit"}</div>
               <div class="muted" style="font-size:12px">SKU ${pr.SKU_Produit||"—"}</div>
-              <div style="font-size:14px;margin-top:4px">${(pr.Couleur_Produit||pr.COULEUR||"—")}${pr.TAILLE?` • ${pr.TAILLE}`:""}</div>
+              <div style="font-size:14px;margin-top:4px">${colorText}${pr.TAILLE?` • ${pr.TAILLE}`:""}</div>
               <div style="font-weight:600;margin-top:6px">${fmtEUR(pr.Prix_ligne ?? pr.PRIX_UNITAIRE_TTC)}</div>
             </div>`;
           grid.appendChild(el);
@@ -337,7 +334,6 @@ html4 = r"""<!DOCTYPE html>
       }
     }
 
-    // Live suggestions for name mode
     function hideSuggestions(){ $("#suggestions").style.display = "none"; $("#suggestions").innerHTML=""; }
     function showSuggestions(items){
       const box = $("#suggestions");
@@ -353,7 +349,6 @@ html4 = r"""<!DOCTYPE html>
       box.style.display = "block";
       box.querySelectorAll(".suggestion").forEach(el=>{
         el.addEventListener("click", async ()=>{
-          // Prefer email search to find the exact record
           const em = el.getAttribute("data-email");
           const ph = el.getAttribute("data-phone");
           if(em){ MODE="email"; setTabs(); $("#query").value = em; await findProfile(); }
@@ -372,7 +367,6 @@ html4 = r"""<!DOCTYPE html>
       showSuggestions(results);
     }
 
-    // UI wiring
     document.querySelectorAll(".tabbtn").forEach(btn=>{
       btn.addEventListener("click", ()=>{ MODE = btn.dataset.mode; setTabs(); hideSuggestions(); });
     });
@@ -387,8 +381,3 @@ html4 = r"""<!DOCTYPE html>
   </script>
 </body>
 </html>
-"""
-with open("/mnt/data/etam_clienteling_v4.html","w",encoding="utf-8") as f:
-    f.write(html4)
-
-"/mnt/data/etam_clienteling_v4.html"
