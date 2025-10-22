@@ -29,7 +29,7 @@
     .subtitle{font-size:14px;color:var(--muted)}
     .section-title{font-size:18px;font-weight:600;margin:0 0 4px}
     .grid{display:grid;gap:12px}
-    .grid.kpi{grid-template-columns:repeat(3,minmax(0,1fr))} /* 3 KPIs (canal préféré retiré) */
+    .grid.kpi{grid-template-columns:repeat(3,minmax(0,1fr))}
     @media (max-width: 900px){.grid.kpi{grid-template-columns:repeat(2,minmax(0,1fr))}}
     .kpi{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px}
     .kpi .label{font-size:12px;color:var(--muted)}
@@ -40,7 +40,8 @@
     button:hover{background:var(--accent)}
     .btn-outline{background:#fff}
     input,textarea,select{width:100%;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:#fff}
-    .avatar{width:64px;height:64px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700}
+    .avatar{width:64px;height:64px;border-radius:14px;background:var(--accent);display:flex;align-items:center;justify-content:center;font-weight:700;overflow:hidden}
+    .avatar img{width:100%;height:100%;object-fit:cover;display:block}
     .badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
     .badge{border:1px solid var(--border);background:#fff;border-radius:999px;padding:6px 10px;font-size:12px}
     .split{display:grid;grid-template-columns:1fr auto;gap:16px;align-items:start}
@@ -54,7 +55,8 @@
     .muted{color:var(--muted)}
     .error{background:#fee2e2;border:1px solid #fecaca;color:#991b1b;border-radius:12px;padding:12px}
     .hint{color:var(--muted);text-align:center;padding:32px 12px}
-    .mr{margin-right:8px}
+    .store{display:grid;grid-template-columns: 1fr;gap:8px}
+    .store img{width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
   </style>
 </head>
 <body>
@@ -96,7 +98,7 @@
             <div class="content">
               <div class="split">
                 <div style="display:flex;gap:12px">
-                  <div class="avatar" id="avatar">?</div>
+                  <div class="avatar" id="avatar"><span id="avatarInitials">?</span></div>
                   <div>
                     <div id="fullName" class="title"></div>
                     <div id="email" class="muted"></div>
@@ -151,7 +153,17 @@
               </div>
             </div>
           </div>
-          <!-- Bloc Actions supprimé conformément à la demande -->
+
+          <div class="card">
+            <div class="content">
+              <div class="section-title">Magasin préféré</div>
+              <div class="store" style="margin-top:8px">
+                <img id="storeImg" src="https://www.lsa-conso.fr/mediatheque/6/6/9/000379966_1200x800_c.jpg" alt="Paris Opéra">
+                <div class="title">Paris Opéra</div>
+                <div class="muted">Votre boutique de référence</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -161,11 +173,14 @@
   <script>
     const API_BASE = "https://francois-sandbox.saas.imagino.com/ucdapi/API_MuleSoft/2";
     const API_KEY = "0cfe1225-a2f7-43b9-9645-caebdaf5a971";
-    const FORCED_IMAGES = [
+    // Distinct images for product cards
+    const PRODUCT_IMAGES = [
       "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
-      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
-      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwc48f4d3b/655576101_x.jpg?sw=600&sh=906"
+      "https://images.unsplash.com/photo-1520975979651-66b7024e4bb1?q=60&w=1200",  // robe/fashion
+      "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=60&w=1200"   // lingerie/fashion
     ];
+    // Portrait for Lucie Vannier
+    const LUCIE_AVATAR_URL = "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cG9ydHJhaXQlMjBmZW1tZXxlbnwwfHwwfHx8MA%3D%3D&fm=jpg&q=60&w=3000";
 
     let MODE = "email"; // email | phone
     const $ = (sel)=>document.querySelector(sel);
@@ -203,11 +218,24 @@
       return (f+l)||"?";
     }
 
+    function setAvatar(p){
+      const av = $("#avatar");
+      const span = $("#avatarInitials");
+      // If it's Lucie Vannier, show the given portrait
+      const isLucie = (p.firstName||"").toLowerCase()==="lucie" && (p.lastName||"").toLowerCase()==="vannier";
+      if(isLucie){
+        span.style.display = "none";
+        av.innerHTML = `<img src="${LUCIE_AVATAR_URL}" alt="Lucie Vannier">`;
+      }else{
+        av.innerHTML = `<span id="avatarInitials">${initials(p)}</span>`;
+      }
+    }
+
     function renderProfile(p){
       $("#empty").style.display = "none";
       $("#content").style.display = "block";
 
-      $("#avatar").textContent = initials(p);
+      setAvatar(p);
       $("#fullName").textContent = [p.firstName||"", p.lastName||""].join(" ").trim()||"—";
       $("#email").textContent = p.email || "—";
       $("#email2").textContent = p.email || "—";
@@ -241,7 +269,7 @@
       } else {
         $("#productsEmpty").style.display = "none";
         list.forEach((pr,i)=>{
-          const forcedImg = FORCED_IMAGES[i % FORCED_IMAGES.length];
+          const forcedImg = PRODUCT_IMAGES[i % PRODUCT_IMAGES.length]; // ensure distinct rotation
           const el = document.createElement("div");
           el.className = "product";
           el.innerHTML = `
