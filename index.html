@@ -1,4 +1,5 @@
-<!DOCTYPE html>
+# Create v4 with live name search suggestions and corrected 2nd product image
+html4 = r"""<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
@@ -10,9 +11,9 @@
       --fg:#111111;
       --muted:#6b7280;
       --border:#e5e7eb;
-      --brand:#111111;
       --card:#fafafa;
       --accent:#f3f4f6;
+      --hover:#f9fafb;
     }
     *{box-sizing:border-box}
     html,body{margin:0;padding:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
@@ -34,7 +35,7 @@
     .kpi{background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:12px}
     .kpi .label{font-size:12px;color:var(--muted)}
     .kpi .value{font-weight:600}
-    .controls{display:grid;grid-template-columns:220px 1fr auto;gap:12px;align-items:center}
+    .controls{display:grid;grid-template-columns:260px 1fr auto;gap:12px;align-items:center;position:relative}
     @media (max-width:700px){.controls{grid-template-columns:1fr}}
     button,.btn{appearance:none;border:1px solid var(--border);background:#fff;border-radius:12px;padding:10px 14px;font-weight:600;cursor:pointer}
     button:hover{background:var(--accent)}
@@ -57,6 +58,14 @@
     .hint{color:var(--muted);text-align:center;padding:32px 12px}
     .store{display:grid;grid-template-columns: 1fr;gap:8px}
     .store img{width:100%;height:180px;object-fit:cover;border-radius:12px;border:1px solid var(--border)}
+    .tabbtn{min-width:110px}
+    /* Suggestions dropdown */
+    .suggestions{position:absolute;left:272px;right:116px;top:100%;background:#fff;border:1px solid var(--border);border-top:none;border-radius:0 0 12px 12px;max-height:260px;overflow:auto;display:none;z-index:5}
+    @media (max-width:700px){.suggestions{left:0;right:0}}
+    .suggestion{padding:10px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:12px;cursor:pointer}
+    .suggestion:hover{background:var(--hover)}
+    .sg-name{font-weight:600}
+    .sg-meta{color:var(--muted);font-size:12px}
   </style>
 </head>
 <body>
@@ -77,11 +86,15 @@
       <div class="content">
         <div class="section-title">Recherche client</div>
         <div class="controls" style="margin-top:12px">
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="tabbtn" data-mode="name">Nom & prénom</button>
             <button class="tabbtn" data-mode="email">Email</button>
             <button class="tabbtn" data-mode="phone">Téléphone</button>
           </div>
-          <input id="query" placeholder="ex: lucie@exemple.com ou +336..." />
+          <div style="position:relative">
+            <input id="query" placeholder="ex: lucie vannier, lucie@exemple.com ou +336..." />
+            <div id="suggestions" class="suggestions"></div>
+          </div>
           <button id="searchBtn">Chercher</button>
         </div>
       </div>
@@ -89,7 +102,7 @@
 
     <div id="error" style="margin-top:12px;display:none" class="error"></div>
 
-    <div id="empty" class="hint">Aucun profil chargé. Recherchez par email ou téléphone.</div>
+    <div id="empty" class="hint">Aucun profil chargé. Tapez un nom (ex: “lucie vannier”), un email ou un téléphone.</div>
 
     <div id="content" style="display:none">
       <div class="row">
@@ -173,17 +186,25 @@
   <script>
     const API_BASE = "https://francois-sandbox.saas.imagino.com/ucdapi/API_MuleSoft/2";
     const API_KEY = "0cfe1225-a2f7-43b9-9645-caebdaf5a971";
-    // Distinct images for product cards
+    // Distinct images for product cards (2nd image fixed to ETAM URL provided)
     const PRODUCT_IMAGES = [
       "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dw898f6e0d/655576002_x.jpg?sw=600&sh=906",
-      "https://images.unsplash.com/photo-1520975979651-66b7024e4bb1?q=60&w=1200",  // robe/fashion
-      "https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=60&w=1200"   // lingerie/fashion
+      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwfb1021ff/655583324_x.jpg?sw=600&sh=906",
+      "https://images.etam.com/on/demandware.static/-/Sites-ELIN-master/default/dwc48f4d3b/655576101_x.jpg?sw=600&sh=906"
     ];
     // Portrait for Lucie Vannier
     const LUCIE_AVATAR_URL = "https://images.unsplash.com/photo-1580489944761-15a19d654956?ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxzZWFyY2h8Mnx8cG9ydHJhaXQlMjBmZW1tZXxlbnwwfHwwfHx8MA%3D%3D&fm=jpg&q=60&w=3000";
 
-    let MODE = "email"; // email | phone
+    let MODE = "name"; // name | email | phone
     const $ = (sel)=>document.querySelector(sel);
+
+    let cachedProfiles = null; // will store first page for client-side filtering + suggestions
+    async function ensureCache(){
+      if(cachedProfiles) return cachedProfiles;
+      const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
+      cachedProfiles = (data && data.data) ? data.data : [];
+      return cachedProfiles;
+    }
 
     function fmtDate(d){ if(!d) return "—"; return new Date(d).toLocaleDateString(); }
     function fmtDateTime(d){ if(!d) return "—"; return new Date(d).toLocaleString(); }
@@ -209,6 +230,7 @@
     function resetUI(){
       $("#empty").style.display = "block";
       $("#content").style.display = "none";
+      hideSuggestions();
       setError(null);
     }
 
@@ -221,10 +243,9 @@
     function setAvatar(p){
       const av = $("#avatar");
       const span = $("#avatarInitials");
-      // If it's Lucie Vannier, show the given portrait
       const isLucie = (p.firstName||"").toLowerCase()==="lucie" && (p.lastName||"").toLowerCase()==="vannier";
       if(isLucie){
-        span.style.display = "none";
+        span && (span.style.display = "none");
         av.innerHTML = `<img src="${LUCIE_AVATAR_URL}" alt="Lucie Vannier">`;
       }else{
         av.innerHTML = `<span id="avatarInitials">${initials(p)}</span>`;
@@ -269,7 +290,7 @@
       } else {
         $("#productsEmpty").style.display = "none";
         list.forEach((pr,i)=>{
-          const forcedImg = PRODUCT_IMAGES[i % PRODUCT_IMAGES.length]; // ensure distinct rotation
+          const forcedImg = PRODUCT_IMAGES[i % PRODUCT_IMAGES.length];
           const el = document.createElement("div");
           el.className = "product";
           el.innerHTML = `
@@ -291,16 +312,24 @@
         const q = $("#query").value.trim();
         if(!q) return;
 
-        // Pull first page and filter client-side
-        const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
-        const list = data?.data || [];
-        const cleaned = (s)=> (s||"").toString().replace(/\\s+/g,"").toLowerCase();
-        const p = list.find(x=>{
-          if(MODE==="email") return (x.email||"").toLowerCase()===q.toLowerCase();
-          if(MODE==="phone") return cleaned(x.telephone)===cleaned(q);
-          return false;
-        }) || null;
-        if(!p){ setError("Aucun profil trouvé dans la première page (limite 1000)."); resetUI(); return; }
+        let p = null;
+        if(MODE==="name"){
+          const list = await ensureCache();
+          const qn = q.toLowerCase();
+          const results = list.filter(x => ((x.firstName||"") + " " + (x.lastName||"")).toLowerCase().includes(qn));
+          p = results[0] || null;
+          if(!p){ setError("Aucun profil ne correspond à ce nom dans le lot (limite 1000)."); resetUI(); return; }
+        } else {
+          const data = await apiGet("/Vue_unifie_ETAM?limit=1000");
+          const list = data?.data || [];
+          const cleaned = (s)=> (s||"").toString().replace(/\\s+/g,"").toLowerCase();
+          p = list.find(x=>{
+            if(MODE==="email") return (x.email||"").toLowerCase()===q.toLowerCase();
+            if(MODE==="phone") return cleaned(x.telephone)===cleaned(q);
+            return false;
+          }) || null;
+          if(!p){ setError("Aucun profil trouvé dans la première page (limite 1000)."); resetUI(); return; }
+        }
         renderProfile(p);
       }catch(e){
         setError(String(e.message||e));
@@ -308,13 +337,58 @@
       }
     }
 
+    // Live suggestions for name mode
+    function hideSuggestions(){ $("#suggestions").style.display = "none"; $("#suggestions").innerHTML=""; }
+    function showSuggestions(items){
+      const box = $("#suggestions");
+      if(!items.length){ hideSuggestions(); return; }
+      box.innerHTML = items.map(p=>{
+        const name = [p.firstName||"", p.lastName||""].join(" ").trim() || "—";
+        const meta = p.email || p.telephone || "";
+        return `<div class="suggestion" data-email="${(p.email||"").replace(/"/g,"&quot;")}" data-phone="${(p.telephone||"").replace(/"/g,"&quot;")}">
+                  <div class="sg-name">${name}</div>
+                  <div class="sg-meta">${meta}</div>
+                </div>`;
+      }).join("");
+      box.style.display = "block";
+      box.querySelectorAll(".suggestion").forEach(el=>{
+        el.addEventListener("click", async ()=>{
+          // Prefer email search to find the exact record
+          const em = el.getAttribute("data-email");
+          const ph = el.getAttribute("data-phone");
+          if(em){ MODE="email"; setTabs(); $("#query").value = em; await findProfile(); }
+          else if(ph){ MODE="phone"; setTabs(); $("#query").value = ph; await findProfile(); }
+          hideSuggestions();
+        });
+      });
+    }
+
+    async function onQueryInput(){
+      if(MODE!=="name"){ hideSuggestions(); return; }
+      const q = $("#query").value.trim().toLowerCase();
+      if(q.length<2){ hideSuggestions(); return; }
+      const list = await ensureCache();
+      const results = list.filter(x => ((x.firstName||"") + " " + (x.lastName||"")).toLowerCase().includes(q)).slice(0,25);
+      showSuggestions(results);
+    }
+
     // UI wiring
     document.querySelectorAll(".tabbtn").forEach(btn=>{
-      btn.addEventListener("click", ()=>{ MODE = btn.dataset.mode; setTabs(); });
+      btn.addEventListener("click", ()=>{ MODE = btn.dataset.mode; setTabs(); hideSuggestions(); });
     });
     setTabs();
     $("#searchBtn").addEventListener("click", findProfile);
     $("#resetBtn").addEventListener("click", ()=>{ $("#query").value=""; resetUI(); });
+    $("#query").addEventListener("input", onQueryInput);
+    document.addEventListener("click", (e)=>{
+      const s = document.getElementById("suggestions");
+      if(!s.contains(e.target) && e.target!==document.getElementById("query")) hideSuggestions();
+    });
   </script>
 </body>
 </html>
+"""
+with open("/mnt/data/etam_clienteling_v4.html","w",encoding="utf-8") as f:
+    f.write(html4)
+
+"/mnt/data/etam_clienteling_v4.html"
